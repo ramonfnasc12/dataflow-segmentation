@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Customer Segmentation Architecture</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #00111A;
+      overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #deck {
+      position: relative;
+      width: min(100vw, 177.778vh);
+      height: min(56.25vw, 100vh);
+      overflow: hidden;
+    }
+    .slide {
+      position: absolute; inset: 0;
+      opacity: 0; pointer-events: none;
+      transform: translateY(32px);
+      transition: opacity .6s cubic-bezier(.4,0,.2,1), transform .6s cubic-bezier(.4,0,.2,1);
+    }
+    .slide svg { width: 100%; height: 100%; display: block; }
+    .slide.active { opacity: 1; pointer-events: all; transform: translateY(0); }
+    .slide.prev   { opacity: 0; transform: translateY(-32px); transition: opacity .38s ease, transform .38s ease; }
+    #ctrl {
+      position: fixed; bottom: 14px; right: 20px;
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(0,17,26,.92); border: 1px solid rgba(255,255,255,.07);
+      border-radius: 28px; padding: 7px 16px; backdrop-filter: blur(20px); z-index: 999;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+    .cb {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(0,237,100,.07); border: 1px solid rgba(0,237,100,.22);
+      color: #00ED64; cursor: pointer; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s; user-select: none;
+    }
+    .cb:hover { background: rgba(0,237,100,.17); }
+    #ctr { font-size: 11px; color: #889397; letter-spacing: 1.2px; width: 56px; text-align: center; white-space: nowrap; }
+  </style>
+</head>
+<body>
+<div id="deck">
+
+<!-- ===================== SLIDE 1: TITLE ===================== -->
+<div class="slide active" id="s1">
+<svg viewBox="0 0 1400 788" xmlns="http://www.w3.org/2000/svg" font-family="'Inter','SF Pro Display',system-ui,sans-serif">
+<defs>
+  <linearGradient id="s1_bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#001E2B"/><stop offset="100%" stop-color="#00111A"/></linearGradient>
+  <radialGradient id="s1_vignette" cx="50%" cy="50%" r="72%"><stop offset="60%" stop-color="transparent"/><stop offset="100%" stop-color="rgba(0,8,14,.7)"/></radialGradient>
+  <filter id="s1_glow"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="s1_blur"><feGaussianBlur stdDeviation="28"/></filter>
+  <pattern id="s1_grid" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="16" cy="16" r=".85" fill="#4A9B8E" opacity=".055"/></pattern>
+</defs>
+<rect width="1400" height="788" fill="url(#s1_bg)"/>
+<rect width="1400" height="788" fill="url(#s1_grid)"/>
+<rect width="1400" height="788" fill="url(#s1_vignette)"/>
+<ellipse cx="1050" cy="394" rx="450" ry="420" fill="#00ED64" opacity=".03" filter="url(#s1_blur)"/>
+<ellipse cx="300" cy="600" rx="300" ry="280" fill="#4FC3F7" opacity=".02" filter="url(#s1_blur)"/>
+<circle r="3" fill="#00ED64" opacity=".8"><animateMotion path="M700,300 C900,250 1000,400 900,500 C800,600 500,550 400,400 C300,300 500,250 700,300" dur="12s" repeatCount="indefinite"/></circle>
+<text x="700" y="330" text-anchor="middle" font-size="76" font-weight="800" fill="#E3FCF7" letter-spacing="-2">Real-Time Customer</text>
+<text x="700" y="410" text-anchor="middle" font-size="76" font-weight="800" fill="#E3FCF7" letter-spacing="-2">Segmentation</text>
+<rect x="580" y="440" width="240" height="3" rx="1.5" fill="#00ED64" opacity=".8"><animate attributeName="opacity" values=".5;1;.5" dur="3s" repeatCount="indefinite"/></rect>
+<text x="700" y="495" text-anchor="middle" font-size="26" font-weight="400" fill="#00ED64">GCP Dataflow + MongoDB Atlas</text>
+<text x="700" y="555" text-anchor="middle" font-size="14" fill="#889397" letter-spacing="4" font-weight="600">ARCHITECTURE DEEP DIVE</text>
+</svg>
+</div>
+
+<!-- ===================== SLIDE 2: AGENDA ===================== -->
+<div class="slide" id="s2">
+<svg viewBox="0 0 1400 788" xmlns="http://www.w3.org/2000/svg" font-family="'Inter','SF Pro Display',system-ui,sans-serif">
+<defs>
+  <linearGradient id="s2_bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#001E2B"/><stop offset="100%" stop-color="#00111A"/></linearGradient>
+  <radialGradient id="s2_vignette" cx="50%" cy="50%" r="72%"><stop offset="60%" stop-color="transparent"/><stop offset="100%" stop-color="rgba(0,8,14,.7)"/></radialGradient>
+  <filter id="s2_blur"><feGaussianBlur stdDeviation="28"/></filter>
+  <pattern id="s2_grid" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="16" cy="16" r=".85" fill="#4A9B8E" opacity=".055"/></pattern>
+</defs>
+<rect width="1400" height="788" fill="url(#s2_bg)"/>
+<rect width="1400" height="788" fill="url(#s2_grid)"/>
+<rect width="1400" height="788" fill="url(#s2_vignette)"/>
+<ellipse cx="1200" cy="200" rx="350" ry="300" fill="#00ED64" opacity=".025" filter="url(#s2_blur)"/>
+<text x="100" y="100" font-size="44" font-weight="700" fill="#E3FCF7">What We'll Cover</text>
+<g transform="translate(100, 140)">
+  <rect x="0" y="0" width="560" height="66" rx="8" fill="#00ED64" fill-opacity=".06" stroke="#00ED64" stroke-opacity=".2"/>
+  <rect x="0" y="5" width="4" height="56" rx="2" fill="#00ED64" opacity=".7"/>
+  <text x="24" y="22" font-size="10" letter-spacing="2" font-weight="700" fill="#00ED64" opacity=".65">01</text>
+  <text x="24" y="42" font-size="17" font-weight="600" fill="#E3FCF7">Requirements &amp; Scale</text>
+  <text x="24" y="58" font-size="12" fill="#889397">4-8K events/s, sub-2s latency, 200K concurrent sessions</text>
+  <animate attributeName="opacity" values="0;1" dur=".5s" begin=".2s" fill="freeze"/>
+</g>
+<g transform="translate(100, 222)">
+  <rect x="0" y="0" width="560" height="66" rx="8" fill="#4FC3F7" fill-opacity=".06" stroke="#4FC3F7" stroke-opacity=".2"/>
+  <rect x="0" y="5" width="4" height="56" rx="2" fill="#4FC3F7" opacity=".7"/>
+  <text x="24" y="22" font-size="10" letter-spacing="2" font-weight="700" fill="#4FC3F7" opacity=".65">02</text>
+  <text x="24" y="42" font-size="17" font-weight="600" fill="#E3FCF7">End-to-End Architecture</text>
+  <text x="24" y="58" font-size="12" fill="#889397">Pipeline topology: Pub/Sub, Dataflow, MongoDB Atlas</text>
+  <animate attributeName="opacity" values="0;1" dur=".5s" begin=".4s" fill="freeze"/>
+</g>
+<g transform="translate(100, 304)">
+  <rect x="0" y="0" width="560" height="66" rx="8" fill="#26C6A6" fill-opacity=".06" stroke="#26C6A6" stroke-opacity=".2"/>
+  <rect x="0" y="5" width="4" height="56" rx="2" fill="#26C6A6" opacity=".7"/>
+  <text x="24" y="22" font-size="10" letter-spacing="2" font-weight="700" fill="#26C6A6" opacity=".65">03</text>
+  <text x="24" y="42" font-size="17" font-weight="600" fill="#E3FCF7">Session State &amp; Sequence Tracking</text>
+  <text x="24" y="58" font-size="12" fill="#889397">How the pipeline handles ordering, memory, and state</text>
+  <animate attributeName="opacity" values="0;1" dur=".5s" begin=".6s" fill="freeze"/>
+</g>
+<g transform="translate(100, 386)">
+  <rect x="0" y="0" width="560" height="66" rx="8" fill="#FFB300" fill-opacity=".06" stroke="#FFB300" stroke-opacity=".2"/>
+  <rect x="0" y="5" width="4" height="56" rx="2" fill="#FFB300" opacity=".7"/>
+  <text x="24" y="22" font-size="10" letter-spacing="2" font-weight="700" fill="#FFB300" opacity=".65">04</text>
+  <text x="24" y="42" font-size="17" font-weight="600" fill="#E3FCF7">MongoDB Atlas in the Architecture</text>
+  <text x="24" y="58" font-size="12" fill="#889397">Document model, session revival, flexible config, scalability</text>
+  <animate attributeName="opacity" values="0;1" dur=".5s" begin=".8s" fill="freeze"/>
+</g>
+<g transform="translate(100, 468)">
+  <rect x="0" y="0" width="560" height="66" rx="8" fill="#00ED64" fill-opacity=".06" stroke="#00ED64" stroke-opacity=".2"/>
+  <rect x="0" y="5" width="4" height="56" rx="2" fill="#00ED64" opacity=".7"/>
+  <text x="24" y="22" font-size="10" letter-spacing="2" font-weight="700" fill="#00ED64" opacity=".65">05</text>
+  <text x="24" y="42" font-size="17" font-weight="600" fill="#E3FCF7">Rule Engine &amp; Flexible Segmentation</text>
+  <text x="24" y="58" font-size="12" fill="#889397">Recursive condition trees, zero-downtime rule updates</text>
+  <animate attributeName="opacity" values="0;1" dur=".5s" begin="1s" fill="freeze"/>
+</g>
+<g transform="translate(100, 550)">
+  <rect x="0" y="0" width="560" height="66" rx="8" fill="#4FC3F7" fill-opacity=".06" stroke="#4FC3F7" stroke-opacity=".2"/>
+  <rect x="0" y="5" width="4" height="56" rx="2" fill="#4FC3F7" opacity=".7"/>
+  <text x="24" y="22" font-size="10" letter-spacing="2" font-weight="700" fill="#4FC3F7" opacity=".65">06</text>
+  <text x="24" y="42" font-size="17" font-weight="600" fill="#E3FCF7">ML-Ready &amp; Future Path</text>
+  <text x="24" y="58" font-size="12" fill="#889397">Session summary as feature vector, RunInference integration</text>
+  <animate attributeName="opacity" values="0;1" dur=".5s" begin="1.2s" fill="freeze"/>
+</g>
+</svg>
+</div>
+
+<!-- ===================== SLIDE 3: REQUIREMENTS ===================== -->
+<div class="slide" id="s3">
+<svg viewBox="0 0 1400 788" xmlns="http://www.w3.org/2000/svg" font-family="'Inter','SF Pro Display',system-ui,sans-serif">
+<defs>
+  <linearGradient id="s3_bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#001E2B"/><stop offset="100%" stop-color="#00111A"/></linearGradient>
+  <radialGradient id="s3_vignette" cx="50%" cy="50%" r="72%"><stop offset="60%" stop-color="transparent"/><stop offset="100%" stop-color="rgba(0,8,14,.7)"/></radialGradient>
+  <filter id="s3_blur"><feGaussianBlur stdDeviation="28"/></filter>
+  <pattern id="s3_grid" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="16" cy="16" r=".85" fill="#4A9B8E" opacity=".055"/></pattern>
+</defs>
+<rect width="1400" height="788" fill="url(#s3_bg)"/>
+<rect width="1400" height="788" fill="url(#s3_grid)"/>
+<rect width="1400" height="788" fill="url(#s3_vignette)"/>
+<ellipse cx="250" cy="394" rx="400" ry="350" fill="#FFB300" opacity=".02" filter="url(#s3_blur)"/>
+<text x="100" y="60" font-size="11" letter-spacing="3.5" font-weight="600" fill="#889397">SECTION 01</text>
+<text x="100" y="120" font-size="42" font-weight="700" fill="#E3FCF7">Requirements &amp; Scale</text>
+<g transform="translate(100, 170)">
+  <rect x="0" y="0" width="370" height="120" rx="10" fill="#FFB300" fill-opacity=".06" stroke="#FFB300" stroke-opacity=".2"/>
+  <text x="24" y="36" font-size="28" fill="#FFB300">4K-8K</text>
+  <text x="24" y="60" font-size="14" font-weight="600" fill="#E3FCF7">Events per second</text>
+  <text x="24" y="82" font-size="12" fill="#889397">Baseline 4K, campaign spikes to 8K</text>
+  <text x="24" y="100" font-size="12" fill="#889397">within seconds</text>
+</g>
+<g transform="translate(500, 170)">
+  <rect x="0" y="0" width="370" height="120" rx="10" fill="#00ED64" fill-opacity=".06" stroke="#00ED64" stroke-opacity=".2"/>
+  <text x="24" y="36" font-size="28" fill="#00ED64">&lt; 2s</text>
+  <text x="24" y="60" font-size="14" font-weight="600" fill="#E3FCF7">End-to-end latency SLA</text>
+  <text x="24" y="82" font-size="12" fill="#889397">From raw tracking event to segment</text>
+  <text x="24" y="100" font-size="12" fill="#889397">available in Customer 360 API</text>
+</g>
+<g transform="translate(900, 170)">
+  <rect x="0" y="0" width="370" height="120" rx="10" fill="#4FC3F7" fill-opacity=".06" stroke="#4FC3F7" stroke-opacity=".2"/>
+  <text x="24" y="36" font-size="28" fill="#4FC3F7">200K</text>
+  <text x="24" y="60" font-size="14" font-weight="600" fill="#E3FCF7">Concurrent sessions</text>
+  <text x="24" y="82" font-size="12" fill="#889397">Each with stateful processing,</text>
+  <text x="24" y="100" font-size="12" fill="#889397">rule evaluation, sequence tracking</text>
+</g>
+<text x="100" y="350" font-size="18" font-weight="600" fill="#E3FCF7">Key Constraints</text>
+<g transform="translate(100, 375)"><circle cx="10" cy="10" r="4" fill="#00ED64" opacity=".7"/><text x="26" y="14" font-size="14" fill="#E3FCF7">Events may arrive out of order but rules require exact sequence matching</text></g>
+<g transform="translate(100, 410)"><circle cx="10" cy="10" r="4" fill="#00ED64" opacity=".7"/><text x="26" y="14" font-size="14" fill="#E3FCF7">Sessions can have 500+ events each — state must remain bounded</text></g>
+<g transform="translate(100, 445)"><circle cx="10" cy="10" r="4" fill="#00ED64" opacity=".7"/><text x="26" y="14" font-size="14" fill="#E3FCF7">Segmentation rules evolve continuously — no pipeline redeployment allowed</text></g>
+<g transform="translate(100, 480)"><circle cx="10" cy="10" r="4" fill="#00ED64" opacity=".7"/><text x="26" y="14" font-size="14" fill="#E3FCF7">Architecture must support ML model integration from day one</text></g>
+<g transform="translate(100, 515)"><circle cx="10" cy="10" r="4" fill="#00ED64" opacity=".7"/><text x="26" y="14" font-size="14" fill="#E3FCF7">Historical context from previous sessions influences current segmentation</text></g>
+</svg>
+</div>
+
+<!-- ===================== SLIDE 4: ARCHITECTURE DIAGRAM ===================== -->
+<div class="slide" id="s4">
+<svg viewBox="0 0 1400 788" xmlns="http://www.w3.org/2000/svg" font-family="'Inter','SF Pro Display',system-ui,sans-serif">
+<defs>
+  <linearGradient id="s4_bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#001E2B"/><stop offset="100%" stop-color="#00111A"/></linearGradient>
+  <radialGradient id="s4_vignette" cx="50%" cy="50%" r="72%"><stop offset="60%" stop-color="transparent"/><stop offset="100%" stop-color="rgba(0,8,14,.7)"/></radialGradient>
+  <filter id="s4_blur"><feGaussianBlur stdDeviation="28"/></filter>
+  <pattern id="s4_grid" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="16" cy="16" r=".85" fill="#4A9B8E" opacity=".055"/></pattern>
+</defs>
+<rect width="1400" height="788" fill="url(#s4_bg)"/>
+<rect width="1400" height="788" fill="url(#s4_grid)"/>
+<rect width="1400" height="788" fill="url(#s4_vignette)"/>
+<ellipse cx="700" cy="400" rx="500" ry="350" fill="#4FC3F7" opacity=".02" filter="url(#s4_blur)"/>
+<text x="100" y="60" font-size="11" letter-spacing="3.5" font-weight="600" fill="#889397">SECTION 02</text>
+<text x="100" y="100" font-size="36" font-weight="700" fill="#E3FCF7">End-to-End Architecture</text>
+
+<!-- Input Pub/Sub -->
+<g transform="translate(60, 160)">
+  <rect x="0" y="0" width="160" height="70" rx="8" fill="#4FC3F7" fill-opacity=".08" stroke="#4FC3F7" stroke-opacity=".3"/>
+  <text x="80" y="30" text-anchor="middle" font-size="12" font-weight="700" fill="#4FC3F7">Pub/Sub</text>
+  <text x="80" y="48" text-anchor="middle" font-size="11" fill="#889397">Tracking Events</text>
+  <text x="80" y="63" text-anchor="middle" font-size="10" fill="#889397">4K-8K msg/s</text>
+</g>
+<line x1="220" y1="195" x2="265" y2="195" stroke="#4FC3F7" stroke-width="2" stroke-opacity=".5"/>
+<polygon points="265,191 274,195 265,199" fill="#4FC3F7" opacity=".7"/>
+
+<!-- Dataflow Pipeline -->
+<g transform="translate(274, 130)">
+  <rect x="0" y="0" width="760" height="200" rx="12" fill="#00ED64" fill-opacity=".03" stroke="#00ED64" stroke-opacity=".15" stroke-dasharray="4,4"/>
+  <text x="20" y="22" font-size="10" letter-spacing="2" font-weight="700" fill="#00ED64" opacity=".7">GCP DATAFLOW PIPELINE</text>
+  <!-- Parse -->
+  <rect x="20" y="38" width="130" height="55" rx="6" fill="#E3FCF7" fill-opacity=".05" stroke="#E3FCF7" stroke-opacity=".15"/>
+  <text x="85" y="62" text-anchor="middle" font-size="11" font-weight="600" fill="#E3FCF7">Parse &amp;</text>
+  <text x="85" y="77" text-anchor="middle" font-size="11" font-weight="600" fill="#E3FCF7">Validate</text>
+  <line x1="150" y1="65" x2="175" y2="65" stroke="#E3FCF7" stroke-width="1.5" stroke-opacity=".3"/>
+  <polygon points="175,62 182,65 175,68" fill="#E3FCF7" opacity=".5"/>
+  <!-- Key -->
+  <rect x="182" y="38" width="110" height="55" rx="6" fill="#E3FCF7" fill-opacity=".05" stroke="#E3FCF7" stroke-opacity=".15"/>
+  <text x="237" y="62" text-anchor="middle" font-size="11" font-weight="600" fill="#E3FCF7">Key by</text>
+  <text x="237" y="77" text-anchor="middle" font-size="11" font-weight="600" fill="#E3FCF7">session_id</text>
+  <line x1="292" y1="65" x2="317" y2="65" stroke="#E3FCF7" stroke-width="1.5" stroke-opacity=".3"/>
+  <polygon points="317,62 324,65 317,68" fill="#E3FCF7" opacity=".5"/>
+  <!-- Stateful DoFn -->
+  <rect x="324" y="30" width="200" height="75" rx="6" fill="#00ED64" fill-opacity=".08" stroke="#00ED64" stroke-opacity=".3"/>
+  <text x="424" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#00ED64">Stateful DoFn</text>
+  <text x="424" y="70" text-anchor="middle" font-size="10" fill="#889397">Update Summary</text>
+  <text x="424" y="84" text-anchor="middle" font-size="10" fill="#889397">Evaluate Rules</text>
+  <text x="424" y="98" text-anchor="middle" font-size="10" fill="#889397">Detect Changes</text>
+  <animate attributeName="stroke-opacity" values=".3;.6;.3" dur="4s" repeatCount="indefinite"/>
+  <line x1="524" y1="67" x2="555" y2="67" stroke="#00ED64" stroke-width="1.5" stroke-opacity=".4"/>
+  <polygon points="555,64 562,67 555,70" fill="#00ED64" opacity=".7"/>
+  <!-- WriteToPubSub -->
+  <rect x="562" y="38" width="130" height="55" rx="6" fill="#4FC3F7" fill-opacity=".08" stroke="#4FC3F7" stroke-opacity=".3"/>
+  <text x="627" y="62" text-anchor="middle" font-size="11" font-weight="600" fill="#4FC3F7">Write to</text>
+  <text x="627" y="77" text-anchor="middle" font-size="11" font-weight="600" fill="#4FC3F7">Pub/Sub</text>
+  <!-- Side Inputs label -->
+  <text x="200" y="135" font-size="10" letter-spacing="1.5" font-weight="600" fill="#889397">SIDE INPUTS (FROM MONGODB)</text>
+  <rect x="200" y="145" width="140" height="35" rx="5" fill="#00ED64" fill-opacity=".05" stroke="#00ED64" stroke-opacity=".15"/>
+  <text x="270" y="167" text-anchor="middle" font-size="10" fill="#E3FCF7">Feature Schemas</text>
+  <rect x="360" y="145" width="100" height="35" rx="5" fill="#00ED64" fill-opacity=".05" stroke="#00ED64" stroke-opacity=".15"/>
+  <text x="410" y="167" text-anchor="middle" font-size="10" fill="#E3FCF7">Rules</text>
+</g>
+
+<!-- Output Pub/Sub -->
+<line x1="1034" y1="195" x2="1070" y2="195" stroke="#4FC3F7" stroke-width="2" stroke-opacity=".5"/>
+<polygon points="1070,191 1079,195 1070,199" fill="#4FC3F7" opacity=".7"/>
+<g transform="translate(1079, 160)">
+  <rect x="0" y="0" width="160" height="70" rx="8" fill="#4FC3F7" fill-opacity=".08" stroke="#4FC3F7" stroke-opacity=".3"/>
+  <text x="80" y="30" text-anchor="middle" font-size="12" font-weight="700" fill="#4FC3F7">Pub/Sub</text>
+  <text x="80" y="48" text-anchor="middle" font-size="11" fill="#889397">Segment Events</text>
+  <text x="80" y="63" text-anchor="middle" font-size="10" fill="#889397">assigned / revoked</text>
+</g>
+
+<!-- Consumers -->
+<text x="1100" y="260" font-size="10" fill="#889397">Customer 360 API</text>
+<text x="1100" y="278" font-size="10" fill="#889397">Analytics / Dashboards</text>
+
+<!-- MongoDB Atlas -->
+<g transform="translate(274, 400)">
+  <rect x="0" y="0" width="760" height="180" rx="12" fill="#00ED64" fill-opacity=".05" stroke="#00ED64" stroke-opacity=".25"/>
+  <text x="20" y="26" font-size="10" letter-spacing="2" font-weight="700" fill="#00ED64">MONGODB ATLAS</text>
+  <rect x="20" y="45" width="155" height="100" rx="6" fill="#E3FCF7" fill-opacity=".04" stroke="#E3FCF7" stroke-opacity=".12"/>
+  <text x="97" y="72" text-anchor="middle" font-size="12" font-weight="600" fill="#E3FCF7">sessions</text>
+  <text x="97" y="92" text-anchor="middle" font-size="10" fill="#889397">Session summaries</text>
+  <text x="97" y="108" text-anchor="middle" font-size="10" fill="#889397">Checkpoint &amp; revival</text>
+  <text x="97" y="124" text-anchor="middle" font-size="10" fill="#889397">Current segments</text>
+  <rect x="195" y="45" width="175" height="100" rx="6" fill="#E3FCF7" fill-opacity=".04" stroke="#E3FCF7" stroke-opacity=".12"/>
+  <text x="282" y="72" text-anchor="middle" font-size="12" font-weight="600" fill="#E3FCF7">customer_sessions</text>
+  <text x="282" y="92" text-anchor="middle" font-size="10" fill="#889397">Historical context</text>
+  <text x="282" y="108" text-anchor="middle" font-size="10" fill="#889397">Last segments</text>
+  <text x="282" y="124" text-anchor="middle" font-size="10" fill="#889397">Session count</text>
+  <rect x="390" y="45" width="155" height="100" rx="6" fill="#E3FCF7" fill-opacity=".04" stroke="#E3FCF7" stroke-opacity=".12"/>
+  <text x="467" y="72" text-anchor="middle" font-size="12" font-weight="600" fill="#E3FCF7">feature_schemas</text>
+  <text x="467" y="92" text-anchor="middle" font-size="10" fill="#889397">What to track</text>
+  <text x="467" y="108" text-anchor="middle" font-size="10" fill="#889397">Aggregates, sequences</text>
+  <text x="467" y="124" text-anchor="middle" font-size="10" fill="#889397">Flags, timing</text>
+  <rect x="565" y="45" width="155" height="100" rx="6" fill="#E3FCF7" fill-opacity=".04" stroke="#E3FCF7" stroke-opacity=".12"/>
+  <text x="642" y="72" text-anchor="middle" font-size="12" font-weight="600" fill="#E3FCF7">rules</text>
+  <text x="642" y="92" text-anchor="middle" font-size="10" fill="#889397">Segment conditions</text>
+  <text x="642" y="108" text-anchor="middle" font-size="10" fill="#889397">Boolean tree</text>
+  <text x="642" y="124" text-anchor="middle" font-size="10" fill="#889397">Versioned</text>
+</g>
+
+<!-- Arrows Dataflow <-> MongoDB -->
+<line x1="550" y1="330" x2="550" y2="390" stroke="#00ED64" stroke-width="1.5" stroke-opacity=".4" stroke-dasharray="4,3"/>
+<text x="560" y="365" font-size="9" fill="#889397">revival / close</text>
+<line x1="750" y1="330" x2="750" y2="390" stroke="#00ED64" stroke-width="1.5" stroke-opacity=".4" stroke-dasharray="4,3"/>
+<text x="760" y="365" font-size="9" fill="#889397">side inputs</text>
+
+<!-- Dead Letter -->
+<g transform="translate(60, 280)">
+  <rect x="0" y="0" width="160" height="45" rx="6" fill="#FFB300" fill-opacity=".06" stroke="#FFB300" stroke-opacity=".2"/>
+  <text x="80" y="28" text-anchor="middle" font-size="11" font-weight="600" fill="#FFB300">Dead Letter Topic</text>
+</g>
+<line x1="360" y1="260" x2="220" y2="290" stroke="#FFB300" stroke-width="1" stroke-opacity=".3" stroke-dasharray="3,3"/>
+
+<!-- Latency callout -->
+<g transform="translate(100, 650)">
+  <rect x="0" y="0" width="1200" height="50" rx="8" fill="#00ED64" fill-opacity=".04" stroke="#00ED64" stroke-opacity=".15"/>
+  <text x="30" y="20" font-size="12" font-weight="700" fill="#00ED64">End-to-end latency: ~170-360ms</text>
+  <text x="30" y="38" font-size="12" fill="#889397">Pub/Sub in (~100ms) + DoFn (~5ms) + Pub/Sub out (~50ms) + Consumer ingestion (~200ms) = well within 2s SLA</text>
+</g>
+</svg>
+</div>
+
+<!-- ===================== SLIDE 5: SESSION STATE ===================== -->
+<div class="slide" id="s5">
+<svg viewBox="0 0 1400 788" xmlns="http://www.w3.org/2000/svg" font-family="'Inter','SF Pro Display',system-ui,sans-serif">
+<defs>
+  <linearGradient id="s5_bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#001E2B"/><stop offset="100%" stop-color="#00111A"/></linearGradient>
+  <radialGradient id="s5_vignette" cx="50%" cy="50%" r="72%"><stop offset="60%" stop-color="transparent"/><stop offset="100%" stop-color="rgba(0,8,14,.7)"/></radialGradient>
+  <filter id="s5_blur"><feGaussianBlur stdDeviation="28"/></filter>
+  <pattern id="s5_grid" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="16" cy="16" r=".85" fill="#4A9B8E" opacity=".055"/></pattern>
+</defs>
+<rect width="1400" height="788" fill="url(#s5_bg)"/>
+<rect width="1400" height="788" fill="url(#s5_grid)"/>
+<rect width="1400" height="788" fill="url(#s5_vignette)"/>
+<ellipse cx="1100" cy="500" rx="400" ry="350" fill="#26C6A6" opacity=".025" filter="url(#s5_blur)"/>
+<text x="100" y="60" font-size="11" letter-spacing="3.5" font-weight="600" fill="#889397">SECTION 03</text>
+<text x="100" y="110" font-size="36" font-weight="700" fill="#E3FCF7">Session Summary: Compact Stateful Processing</text>
+<text x="100" y="145" font-size="15" fill="#26C6A6">Store the effect of events, not the events themselves — ~1 KB per session</text>
+
+<!-- Session summary document -->
+<g transform="translate(100, 185)">
+  <rect x="0" y="0" width="620" height="480" rx="10" fill="#00ED64" fill-opacity=".04" stroke="#00ED64" stroke-opacity=".2"/>
+  <text x="20" y="28" font-size="11" letter-spacing="2" font-weight="700" fill="#00ED64">SESSION SUMMARY (IN BEAM STATE)</text>
+  <!-- Aggregates -->
+  <rect x="20" y="45" width="580" height="65" rx="6" fill="#E3FCF7" fill-opacity=".03" stroke="#E3FCF7" stroke-opacity=".08"/>
+  <text x="36" y="66" font-size="11" font-weight="700" fill="#FFB300">AGGREGATES</text>
+  <text x="36" y="84" font-size="12" fill="#E3FCF7">product_views: 12  |  searches: 3  |  cart_additions: 1  |  campaign_views: 2</text>
+  <text x="36" y="100" font-size="10" fill="#889397">Incremented on each matching event. O(1) per update.</text>
+  <!-- Sequences -->
+  <rect x="20" y="120" width="580" height="90" rx="6" fill="#E3FCF7" fill-opacity=".03" stroke="#E3FCF7" stroke-opacity=".08"/>
+  <text x="36" y="141" font-size="11" font-weight="700" fill="#26C6A6">SEQUENCE PROGRESS</text>
+  <text x="36" y="161" font-size="12" fill="#E3FCF7">campaign_influenced: [ t=5s, t=10s, null ]  (3 steps, timestamps only)</text>
+  <text x="36" y="179" font-size="12" fill="#E3FCF7">browse_to_cart:      [ t=2s, t=8s, t=12s ] (completed)</text>
+  <text x="36" y="199" font-size="10" fill="#889397">Handles out-of-order events via earliest-match semantics on client timestamps.</text>
+  <!-- Flags -->
+  <rect x="20" y="220" width="580" height="55" rx="6" fill="#E3FCF7" fill-opacity=".03" stroke="#E3FCF7" stroke-opacity=".08"/>
+  <text x="36" y="241" font-size="11" font-weight="700" fill="#4FC3F7">EVENT FLAGS</text>
+  <text x="36" y="261" font-size="12" fill="#E3FCF7">has_added_to_cart: true  |  has_completed_purchase: false</text>
+  <!-- Timing -->
+  <rect x="20" y="285" width="580" height="65" rx="6" fill="#E3FCF7" fill-opacity=".03" stroke="#E3FCF7" stroke-opacity=".08"/>
+  <text x="36" y="306" font-size="11" font-weight="700" fill="#E3FCF7">TIMING</text>
+  <text x="36" y="324" font-size="12" fill="#E3FCF7">total_duration: 930s  |  time_on_products: 245s</text>
+  <text x="36" y="342" font-size="10" fill="#889397">Computed from consecutive event gaps. Only last_event_type + timestamp needed.</text>
+  <!-- Current segments -->
+  <rect x="20" y="360" width="580" height="50" rx="6" fill="#00ED64" fill-opacity=".06" stroke="#00ED64" stroke-opacity=".2"/>
+  <text x="36" y="381" font-size="11" font-weight="700" fill="#00ED64">CURRENT SEGMENTS</text>
+  <text x="36" y="399" font-size="12" fill="#E3FCF7">[ "heavy_browser" ]  — re-evaluated on every event, can be added or revoked</text>
+  <!-- Historical -->
+  <rect x="20" y="420" width="580" height="50" rx="6" fill="#E3FCF7" fill-opacity=".03" stroke="#E3FCF7" stroke-opacity=".08"/>
+  <text x="36" y="441" font-size="11" font-weight="700" fill="#889397">HISTORICAL (loaded once at session start)</text>
+  <text x="36" y="459" font-size="12" fill="#E3FCF7">last_segments: ["casual_visitor"]  |  total_sessions: 4  |  days_since_last: 3.2</text>
+</g>
+
+<!-- Right side: key properties -->
+<g transform="translate(780, 185)">
+  <text x="0" y="25" font-size="18" font-weight="700" fill="#E3FCF7">Key Properties</text>
+  <g transform="translate(0, 50)">
+    <rect x="0" y="0" width="500" height="70" rx="8" fill="#00ED64" fill-opacity=".05" stroke="#00ED64" stroke-opacity=".15"/>
+    <text x="20" y="24" font-size="13" font-weight="600" fill="#00ED64">Bounded by rules, not events</text>
+    <text x="20" y="44" font-size="12" fill="#889397">500 events or 5 events — summary size is the same.</text>
+    <text x="20" y="60" font-size="12" fill="#889397">~1 KB regardless of session length.</text>
+  </g>
+  <g transform="translate(0, 135)">
+    <rect x="0" y="0" width="500" height="70" rx="8" fill="#4FC3F7" fill-opacity=".05" stroke="#4FC3F7" stroke-opacity=".15"/>
+    <text x="20" y="24" font-size="13" font-weight="600" fill="#4FC3F7">O(1) update per event</text>
+    <text x="20" y="44" font-size="12" fill="#889397">Increment a counter, set a flag, update a timestamp.</text>
+    <text x="20" y="60" font-size="12" fill="#889397">No scanning, no sorting, no deserialization of event lists.</text>
+  </g>
+  <g transform="translate(0, 220)">
+    <rect x="0" y="0" width="500" height="70" rx="8" fill="#26C6A6" fill-opacity=".05" stroke="#26C6A6" stroke-opacity=".15"/>
+    <text x="20" y="24" font-size="13" font-weight="600" fill="#26C6A6">Sequences persist forever</text>
+    <text x="20" y="44" font-size="12" fill="#889397">Once a step timestamp is recorded, it stays.</text>
+    <text x="20" y="60" font-size="12" fill="#889397">No eviction. A match at event #500 still works.</text>
+  </g>
+  <g transform="translate(0, 305)">
+    <rect x="0" y="0" width="500" height="70" rx="8" fill="#FFB300" fill-opacity=".05" stroke="#FFB300" stroke-opacity=".15"/>
+    <text x="20" y="24" font-size="13" font-weight="600" fill="#FFB300">Maps 1:1 to MongoDB document</text>
+    <text x="20" y="44" font-size="12" fill="#889397">Serialize from Beam state, write to sessions collection.</text>
+    <text x="20" y="60" font-size="12" fill="#889397">Read back on revival — instant resume.</text>
+  </g>
+  <g transform="translate(0, 390)">
+    <rect x="0" y="0" width="500" height="70" rx="8" fill="#E3FCF7" fill-opacity=".04" stroke="#E3FCF7" stroke-opacity=".1"/>
+    <text x="20" y="24" font-size="13" font-weight="600" fill="#E3FCF7">IS the ML feature vector</text>
+    <text x="20" y="44" font-size="12" fill="#889397">Same data structure feeds rules today and model tomorrow.</text>
+    <text x="20" y="60" font-size="12" fill="#889397">No transformation step needed.</text>
+  </g>
+</g>
+</svg>
+</div>
+
+<!-- ===================== SLIDE 6: SEQUENCE MATCHING ===================== -->
+<div class="slide" id="s6">
+<svg viewBox="0 0 1400 788" xmlns="http://www.w3.org/2000/svg" font-family="'Inter','SF Pro Display',system-ui,sans-serif">
+<defs>
+  <linearGradient id="s6_bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#001E2B"/><stop offset="100%" stop-color="#00111A"/></linearGradient>
+  <radialGradient id="s6_vignette" cx="50%" cy="50%" r="72%"><stop offset="60%" stop-color="transparent"/><stop offset="100%" stop-color="rgba(0,8,14,.7)"/></radialGradient>
+  <filter id="s6_glow"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="s6_blur"><feGaussianBlur stdDeviation="28"/></filter>
+  <pattern id="s6_grid" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="16" cy="16" r=".85" fill="#4A9B8E" opacity=".055"/></pattern>
+</defs>
+<rect width="1400" height="788" fill="url(#s6_bg)"/>
+<rect width="1400" height="788" fill="url(#s6_grid)"/>
+<rect width="1400" height="788" fill="url(#s6_vignette)"/>
+<ellipse cx="700" cy="400" rx="500" ry="400" fill="#26C6A6" opacity=".02" filter="url(#s6_blur)"/>
+<text x="100" y="60" font-size="11" letter-spacing="3.5" font-weight="600" fill="#889397">SECTION 03</text>
+<text x="100" y="100" font-size="36" font-weight="700" fill="#E3FCF7">Sequence Matching: Out-of-Order Events</text>
+<text x="100" y="132" font-size="14" fill="#889397">Rule: product_page_view -> search -> campaign_page_view | Events arrive: search, campaign, product</text>
+
+<!-- Step 1 -->
+<g transform="translate(100, 170)">
+  <rect x="0" y="0" width="540" height="90" rx="8" fill="#4FC3F7" fill-opacity=".06" stroke="#4FC3F7" stroke-opacity=".2"/>
+  <text x="20" y="24" font-size="11" letter-spacing="1" font-weight="700" fill="#4FC3F7">1. EVENT: search (client_ts = 10s)</text>
+  <text x="20" y="48" font-size="13" fill="#E3FCF7">Matches step[1] — record timestamp in slot 1</text>
+  <rect x="20" y="60" width="500" height="22" rx="4" fill="#001E2B" stroke="#E3FCF7" stroke-opacity=".1"/>
+  <text x="35" y="76" font-size="11" font-family="monospace" fill="#889397">steps = [</text>
+  <text x="105" y="76" font-size="11" font-family="monospace" fill="#FFB300">null</text>
+  <text x="140" y="76" font-size="11" font-family="monospace" fill="#889397">,</text>
+  <text x="160" y="76" font-size="11" font-family="monospace" fill="#4FC3F7">t=10</text>
+  <text x="200" y="76" font-size="11" font-family="monospace" fill="#889397">,</text>
+  <text x="220" y="76" font-size="11" font-family="monospace" fill="#FFB300">null</text>
+  <text x="255" y="76" font-size="11" font-family="monospace" fill="#889397">]  Incomplete</text>
+  <animate attributeName="opacity" values="0;1" dur=".4s" begin=".3s" fill="freeze"/>
+</g>
+
+<!-- Step 2 -->
+<g transform="translate(100, 280)">
+  <rect x="0" y="0" width="540" height="90" rx="8" fill="#4FC3F7" fill-opacity=".06" stroke="#4FC3F7" stroke-opacity=".2"/>
+  <text x="20" y="24" font-size="11" letter-spacing="1" font-weight="700" fill="#4FC3F7">2. EVENT: campaign_page_view (client_ts = 15s)</text>
+  <text x="20" y="48" font-size="13" fill="#E3FCF7">Matches step[2] — record timestamp in slot 2</text>
+  <rect x="20" y="60" width="500" height="22" rx="4" fill="#001E2B" stroke="#E3FCF7" stroke-opacity=".1"/>
+  <text x="35" y="76" font-size="11" font-family="monospace" fill="#889397">steps = [</text>
+  <text x="105" y="76" font-size="11" font-family="monospace" fill="#FFB300">null</text>
+  <text x="140" y="76" font-size="11" font-family="monospace" fill="#889397">,</text>
+  <text x="160" y="76" font-size="11" font-family="monospace" fill="#4FC3F7">t=10</text>
+  <text x="200" y="76" font-size="11" font-family="monospace" fill="#889397">,</text>
+  <text x="220" y="76" font-size="11" font-family="monospace" fill="#4FC3F7">t=15</text>
+  <text x="255" y="76" font-size="11" font-family="monospace" fill="#889397">]  Incomplete</text>
+  <animate attributeName="opacity" values="0;1" dur=".4s" begin=".7s" fill="freeze"/>
+</g>
+
+<!-- Step 3 -->
+<g transform="translate(100, 390)">
+  <rect x="0" y="0" width="540" height="110" rx="8" fill="#00ED64" fill-opacity=".08" stroke="#00ED64" stroke-opacity=".3"/>
+  <text x="20" y="24" font-size="11" letter-spacing="1" font-weight="700" fill="#00ED64">3. EVENT: product_page_view (client_ts = 5s)</text>
+  <text x="20" y="48" font-size="13" fill="#E3FCF7">Matches step[0] — record timestamp (earliest match)</text>
+  <rect x="20" y="60" width="500" height="22" rx="4" fill="#001E2B" stroke="#00ED64" stroke-opacity=".2"/>
+  <text x="35" y="76" font-size="11" font-family="monospace" fill="#889397">steps = [</text>
+  <text x="105" y="76" font-size="11" font-family="monospace" fill="#00ED64">t=5</text>
+  <text x="135" y="76" font-size="11" font-family="monospace" fill="#889397">,</text>
+  <text x="155" y="76" font-size="11" font-family="monospace" fill="#00ED64">t=10</text>
+  <text x="195" y="76" font-size="11" font-family="monospace" fill="#889397">,</text>
+  <text x="215" y="76" font-size="11" font-family="monospace" fill="#00ED64">t=15</text>
+  <text x="250" y="76" font-size="11" font-family="monospace" fill="#889397">]</text>
+  <text x="20" y="100" font-size="14" font-weight="700" fill="#00ED64">All filled. Order check: 5 &lt; 10 &lt; 15  SEQUENCE MATCHED</text>
+  <animate attributeName="opacity" values="0;1" dur=".4s" begin="1.1s" fill="freeze"/>
+  <animate attributeName="stroke-opacity" values=".3;.8;.3" dur="3s" begin="1.5s" repeatCount="indefinite"/>
+</g>
+
+<!-- Right side: mechanism -->
+<g transform="translate(700, 170)">
+  <rect x="0" y="0" width="590" height="330" rx="10" fill="#E3FCF7" fill-opacity=".03" stroke="#E3FCF7" stroke-opacity=".08"/>
+  <text x="30" y="40" font-size="18" font-weight="700" fill="#E3FCF7">The Mechanism</text>
+  <text x="30" y="80" font-size="13" fill="#E3FCF7">Each sequence step stores only a timestamp</text>
+  <text x="30" y="100" font-size="12" fill="#889397">Not the event. Not the payload. Just when it happened.</text>
+  <text x="30" y="140" font-size="13" fill="#E3FCF7">Earliest-match semantics</text>
+  <text x="30" y="160" font-size="12" fill="#889397">If a later event has an earlier client_ts, it overwrites the slot.</text>
+  <text x="30" y="180" font-size="12" fill="#889397">This lets late-arriving events self-correct the sequence.</text>
+  <text x="30" y="220" font-size="13" fill="#E3FCF7">Match validation = timestamp ordering</text>
+  <text x="30" y="240" font-size="12" fill="#889397">All slots filled AND timestamps strictly increasing?</text>
+  <text x="30" y="260" font-size="12" fill="#889397">If yes: matched. If no: wait for more events.</text>
+  <text x="30" y="300" font-size="13" font-weight="600" fill="#00ED64">Zero buffering. Zero latency penalty.</text>
+  <text x="30" y="320" font-size="12" fill="#889397">No reorder buffer, no waiting windows, no raw event storage.</text>
+</g>
+
+<!-- Bottom: memory note -->
+<g transform="translate(100, 540)">
+  <rect x="0" y="0" width="1200" height="55" rx="8" fill="#00ED64" fill-opacity=".04" stroke="#00ED64" stroke-opacity=".12"/>
+  <text x="30" y="22" font-size="13" font-weight="600" fill="#00ED64">Memory impact:</text>
+  <text x="160" y="22" font-size="13" fill="#E3FCF7">5 sequences x 3 steps = 15 timestamps = ~200 bytes. Persists regardless of event count.</text>
+  <text x="30" y="42" font-size="12" fill="#889397">At 200K concurrent sessions: ~40 MB for all sequence tracking across the entire pipeline.</text>
+</g>
+</svg>
+</div>
+
+<!-- ===================== SLIDE 7: WHY MONGODB ===================== -->
+<div class="slide" id="s7">
+<svg viewBox="0 0 1400 788" xmlns="http://www.w3.org/2000/svg" font-family="'Inter','SF Pro Display',system-ui,sans-serif">
+<defs>
+  <linearGradient id="s7_bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#001E2B"/><stop offset="100%" stop-color="#00111A"/></linearGradient>
+  <radialGradient id="s7_vignette" cx="50%" cy="50%" r="72%"><stop offset="60%" stop-color="transparent"/><stop offset="100%" stop-color="rgba(0,8,14,.7)"/></radialGradient>
+  <filter id="s7_blur"><feGaussianBlur stdDeviation="28"/></filter>
+  <pattern id="s7_grid" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="16" cy="16" r=".85" fill="#4A9B8E" opacity=".055"/></pattern>
+</defs>
+<rect width="1400" height="788" fill="url(#s7_bg)"/>
+<rect width="1400" height="788" fill="url(#s7_grid)"/>
+<rect width="1400" height="788" fill="url(#s7_vignette)"/>
+<ellipse cx="900" cy="400" rx="500" ry="400" fill="#00ED64" opacity=".025" filter="url(#s7_blur)"/>
+<text x="100" y="60" font-size="11" letter-spacing="3.5" font-weight="600" fill="#889397">SECTION 04</text>
+<text x="100" y="110" font-size="42" font-weight="700" fill="#E3FCF7">Why MongoDB Atlas</text>
+
+<!-- Card 1 -->
+<g transform="translate(100, 160)">
+  <rect x="0" y="0" width="580" height="120" rx="10" fill="#00ED64" fill-opacity=".06" stroke="#00ED64" stroke-opacity=".2"/>
+  <text x="24" y="30" font-size="15" font-weight="700" fill="#00ED64">Document Model = Session State</text>
+  <text x="24" y="54" font-size="13" fill="#E3FCF7">The session summary is a nested document: aggregates, sequences, flags, timing,</text>
+  <text x="24" y="72" font-size="13" fill="#E3FCF7">segments — all in one entity. No joins, no schema migrations.</text>
+  <text x="24" y="98" font-size="12" fill="#889397">Pipeline state serializes directly to/from MongoDB documents. Zero impedance mismatch.</text>
+  <animate attributeName="stroke-opacity" values=".2;.5;.2" dur="5s" repeatCount="indefinite"/>
+</g>
+
+<!-- Card 2 -->
+<g transform="translate(720, 160)">
+  <rect x="0" y="0" width="580" height="120" rx="10" fill="#00ED64" fill-opacity=".06" stroke="#00ED64" stroke-opacity=".2"/>
+  <text x="24" y="30" font-size="15" font-weight="700" fill="#00ED64">Flexible Schema for Rules &amp; Features</text>
+  <text x="24" y="54" font-size="13" fill="#E3FCF7">Rules are recursive boolean trees. Feature schemas define what to track.</text>
+  <text x="24" y="72" font-size="13" fill="#E3FCF7">Both evolve without database migrations or pipeline redeployment.</text>
+  <text x="24" y="98" font-size="12" fill="#889397">Business adds a new rule in MongoDB. Active within 5 minutes for new sessions.</text>
+  <animate attributeName="stroke-opacity" values=".2;.5;.2" dur="5s" begin=".5s" repeatCount="indefinite"/>
+</g>
+
+<!-- Card 3 -->
+<g transform="translate(100, 310)">
+  <rect x="0" y="0" width="580" height="120" rx="10" fill="#4FC3F7" fill-opacity=".06" stroke="#4FC3F7" stroke-opacity=".2"/>
+  <text x="24" y="30" font-size="15" font-weight="700" fill="#4FC3F7">Low-Latency Session Revival</text>
+  <text x="24" y="54" font-size="13" fill="#E3FCF7">Visitor returns after days of inactivity. Pipeline reads session from MongoDB</text>
+  <text x="24" y="72" font-size="13" fill="#E3FCF7">in 5-20ms (indexed by _id) and resumes exactly where it left off.</text>
+  <text x="24" y="98" font-size="12" fill="#889397">Sequence progress, segments, counters — all restored instantly. No data loss.</text>
+</g>
+
+<!-- Card 4 -->
+<g transform="translate(720, 310)">
+  <rect x="0" y="0" width="580" height="120" rx="10" fill="#4FC3F7" fill-opacity=".06" stroke="#4FC3F7" stroke-opacity=".2"/>
+  <text x="24" y="30" font-size="15" font-weight="700" fill="#4FC3F7">Minimal I/O, Maximum Value</text>
+  <text x="24" y="54" font-size="13" fill="#E3FCF7">Writes only on session close (~5-30/s). Reads only on cold revival (~10-100/s).</text>
+  <text x="24" y="72" font-size="13" fill="#E3FCF7">All hot-path processing stays in Beam state — zero MongoDB calls per event.</text>
+  <text x="24" y="98" font-size="12" fill="#889397">Atlas handles this load on an M30 with room to spare.</text>
+</g>
+
+<!-- Card 5 -->
+<g transform="translate(100, 460)">
+  <rect x="0" y="0" width="580" height="120" rx="10" fill="#26C6A6" fill-opacity=".06" stroke="#26C6A6" stroke-opacity=".2"/>
+  <text x="24" y="30" font-size="15" font-weight="700" fill="#26C6A6">Horizontal Scale Matches Dataflow</text>
+  <text x="24" y="54" font-size="13" fill="#E3FCF7">Shard by session_id — the same key Dataflow uses for parallelism.</text>
+  <text x="24" y="72" font-size="13" fill="#E3FCF7">Even distribution across shards because session IDs are high-cardinality.</text>
+  <text x="24" y="98" font-size="12" fill="#889397">Pipeline scales up? MongoDB scales with it, same key distribution.</text>
+</g>
+
+<!-- Card 6 -->
+<g transform="translate(720, 460)">
+  <rect x="0" y="0" width="580" height="120" rx="10" fill="#26C6A6" fill-opacity=".06" stroke="#26C6A6" stroke-opacity=".2"/>
+  <text x="24" y="30" font-size="15" font-weight="700" fill="#26C6A6">TTL &amp; Atomic Operations</text>
+  <text x="24" y="54" font-size="13" fill="#E3FCF7">Closed sessions auto-expire via TTL indexes. No cleanup jobs.</text>
+  <text x="24" y="72" font-size="13" fill="#E3FCF7">$set for session updates — atomic, no full document replacement.</text>
+  <text x="24" y="98" font-size="12" fill="#889397">Efficient at any write frequency. Built for high-throughput streaming patterns.</text>
+</g>
+
+<!-- Bottom: session lifecycle callout -->
+<g transform="translate(100, 630)">
+  <rect x="0" y="0" width="1200" height="60" rx="8" fill="#00ED64" fill-opacity=".04" stroke="#00ED64" stroke-opacity=".12"/>
+  <text x="30" y="24" font-size="13" font-weight="600" fill="#00ED64">Session Lifecycle:</text>
+  <text x="180" y="24" font-size="13" fill="#E3FCF7">Start (read from MongoDB or fresh) -> Process events (Beam state only) -> Close after 30min inactivity (write to MongoDB)</text>
+  <text x="30" y="46" font-size="12" fill="#889397">MongoDB is the durable checkpoint store. Beam is the real-time processing engine. Each does what it's best at.</text>
+</g>
+</svg>
+</div>
+
+<!-- ===================== SLIDE 8: SESSION LIFECYCLE ===================== -->
+<div class="slide" id="s8">
+<svg viewBox="0 0 1400 788" xmlns="http://www.w3.org/2000/svg" font-family="'Inter','SF Pro Display',system-ui,sans-serif">
+<defs>
+  <linearGradient id="s8_bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#001E2B"/><stop offset="100%" stop-color="#00111A"/></linearGradient>
+  <radialGradient id="s8_vignette" cx="50%" cy="50%" r="72%"><stop offset="60%" stop-color="transparent"/><stop offset="100%" stop-color="rgba(0,8,14,.7)"/></radialGradient>
+  <filter id="s8_blur"><feGaussianBlur stdDeviation="28"/></filter>
+  <pattern id="s8_grid" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="16" cy="16" r=".85" fill="#4A9B8E" opacity=".055"/></pattern>
+</defs>
+<rect width="1400" height="788" fill="url(#s8_bg)"/>
+<rect width="1400" height="788" fill="url(#s8_grid)"/>
+<rect width="1400" height="788" fill="url(#s8_vignette)"/>
+<ellipse cx="400" cy="400" rx="400" ry="350" fill="#00ED64" opacity=".02" filter="url(#s8_blur)"/>
+<text x="100" y="60" font-size="11" letter-spacing="3.5" font-weight="600" fill="#889397">SECTION 04</text>
+<text x="100" y="100" font-size="36" font-weight="700" fill="#E3FCF7">Session Lifecycle &amp; MongoDB Interactions</text>
+
+<!-- Timeline -->
+<rect x="100" y="190" width="1200" height="4" rx="2" fill="#E3FCF7" fill-opacity=".1"/>
+
+<!-- Start marker -->
+<circle cx="150" cy="192" r="10" fill="#00ED64" opacity=".8"/>
+<text x="150" y="170" text-anchor="middle" font-size="12" font-weight="700" fill="#00ED64">START</text>
+
+<!-- Processing zone -->
+<rect x="280" y="180" width="720" height="24" rx="4" fill="#4FC3F7" fill-opacity=".06" stroke="#4FC3F7" stroke-opacity=".15" stroke-dasharray="4,4"/>
+<text x="640" y="197" text-anchor="middle" font-size="11" font-weight="600" fill="#4FC3F7">BEAM STATE ONLY — NO MONGODB I/O</text>
+
+<!-- Events flowing -->
+<text x="350" y="170" font-size="10" fill="#889397">event</text>
+<text x="450" y="170" font-size="10" fill="#889397">event</text>
+<text x="550" y="170" font-size="10" fill="#889397">event</text>
+<text x="650" y="170" font-size="10" fill="#889397">...</text>
+<text x="750" y="170" font-size="10" fill="#889397">event</text>
+<text x="880" y="170" font-size="10" fill="#889397">event</text>
+
+<!-- End marker -->
+<circle cx="1200" cy="192" r="10" fill="#FFB300" opacity=".8"/>
+<text x="1200" y="170" text-anchor="middle" font-size="12" font-weight="700" fill="#FFB300">CLOSE</text>
+
+<!-- Start details -->
+<g transform="translate(60, 230)">
+  <rect x="0" y="0" width="280" height="140" rx="8" fill="#00ED64" fill-opacity=".05" stroke="#00ED64" stroke-opacity=".2"/>
+  <text x="16" y="24" font-size="11" letter-spacing="1.5" font-weight="700" fill="#00ED64">ON FIRST EVENT</text>
+  <text x="16" y="50" font-size="12" fill="#E3FCF7">1. Check Beam state (exists?)</text>
+  <text x="16" y="70" font-size="12" fill="#E3FCF7">2. If not: read MongoDB</text>
+  <text x="16" y="90" font-size="12" fill="#E3FCF7">3. Found? Load summary (revival)</text>
+  <text x="16" y="110" font-size="12" fill="#E3FCF7">4. Not found? Fresh session</text>
+  <text x="16" y="130" font-size="12" fill="#889397">Pin schema + rules versions</text>
+</g>
+
+<!-- Middle details -->
+<g transform="translate(440, 230)">
+  <rect x="0" y="0" width="400" height="140" rx="8" fill="#4FC3F7" fill-opacity=".05" stroke="#4FC3F7" stroke-opacity=".15"/>
+  <text x="16" y="24" font-size="11" letter-spacing="1.5" font-weight="700" fill="#4FC3F7">EVERY EVENT (HOT PATH)</text>
+  <text x="16" y="50" font-size="12" fill="#E3FCF7">1. Update aggregates, flags, timing, sequences</text>
+  <text x="16" y="70" font-size="12" fill="#E3FCF7">2. Evaluate all rules against updated summary</text>
+  <text x="16" y="90" font-size="12" fill="#E3FCF7">3. Diff segments: added? revoked?</text>
+  <text x="16" y="110" font-size="12" fill="#E3FCF7">4. If changed: yield SegmentChangeEvent</text>
+  <text x="16" y="130" font-size="12" fill="#889397">Reset inactivity timer (30 min)</text>
+</g>
+
+<!-- End details -->
+<g transform="translate(940, 230)">
+  <rect x="0" y="0" width="360" height="140" rx="8" fill="#FFB300" fill-opacity=".05" stroke="#FFB300" stroke-opacity=".2"/>
+  <text x="16" y="24" font-size="11" letter-spacing="1.5" font-weight="700" fill="#FFB300">ON 30-MIN TIMEOUT</text>
+  <text x="16" y="50" font-size="12" fill="#E3FCF7">1. Write full summary to MongoDB</text>
+  <text x="16" y="70" font-size="12" fill="#889397">   (sessions collection)</text>
+  <text x="16" y="90" font-size="12" fill="#E3FCF7">2. Update customer_sessions</text>
+  <text x="16" y="110" font-size="12" fill="#889397">   (last_segments for next session)</text>
+  <text x="16" y="130" font-size="12" fill="#E3FCF7">3. Clear all Beam state</text>
+</g>
+
+<!-- MongoDB I/O summary -->
+<g transform="translate(100, 430)">
+  <text x="0" y="24" font-size="18" font-weight="700" fill="#E3FCF7">MongoDB Load Profile</text>
+  <g transform="translate(0, 50)">
+    <rect x="0" y="0" width="380" height="80" rx="8" fill="#00ED64" fill-opacity=".05" stroke="#00ED64" stroke-opacity=".15"/>
+    <text x="20" y="22" font-size="11" letter-spacing="1.5" font-weight="600" fill="#00ED64">READS (SESSION REVIVAL)</text>
+    <text x="20" y="46" font-size="22" font-weight="700" fill="#00ED64">~10-100 /s</text>
+    <text x="20" y="66" font-size="12" fill="#889397">Only cold keys. Indexed by _id. 5-20ms each.</text>
+  </g>
+  <g transform="translate(420, 50)">
+    <rect x="0" y="0" width="380" height="80" rx="8" fill="#FFB300" fill-opacity=".05" stroke="#FFB300" stroke-opacity=".15"/>
+    <text x="20" y="22" font-size="11" letter-spacing="1.5" font-weight="600" fill="#FFB300">WRITES (SESSION CLOSE)</text>
+    <text x="20" y="46" font-size="22" font-weight="700" fill="#FFB300">~5-30 /s</text>
+    <text x="20" y="66" font-size="12" fill="#889397">Only when 30-min timer fires. $set operation.</text>
+  </g>
+  <g transform="translate(840, 50)">
+    <rect x="0" y="0" width="380" height="80" rx="8" fill="#4FC3F7" fill-opacity=".05" stroke="#4FC3F7" stroke-opacity=".15"/>
+    <text x="20" y="22" font-size="11" letter-spacing="1.5" font-weight="600" fill="#4FC3F7">CONFIG REFRESH</text>
+    <text x="20" y="46" font-size="22" font-weight="700" fill="#4FC3F7">Every 5 min</text>
+    <text x="20" y="66" font-size="12" fill="#889397">Feature schemas + rules. Small documents.</text>
+  </g>
+</g>
+
+<!-- Key point -->
+<g transform="translate(100, 620)">
+  <rect x="0" y="0" width="1200" height="50" rx="8" fill="#00ED64" fill-opacity=".04" stroke="#00ED64" stroke-opacity=".12"/>
+  <text x="30" y="30" font-size="14" font-weight="600" fill="#00ED64">Zero MongoDB calls on the hot path.</text>
+  <text x="340" y="30" font-size="14" fill="#E3FCF7">All event processing happens in Beam state. MongoDB handles durability and configuration only.</text>
+</g>
+</svg>
+</div>
+
+<!-- ===================== SLIDE 9: RULE ENGINE ===================== -->
+<div class="slide" id="s9">
+<svg viewBox="0 0 1400 788" xmlns="http://www.w3.org/2000/svg" font-family="'Inter','SF Pro Display',system-ui,sans-serif">
+<defs>
+  <linearGradient id="s9_bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#001E2B"/><stop offset="100%" stop-color="#00111A"/></linearGradient>
+  <radialGradient id="s9_vignette" cx="50%" cy="50%" r="72%"><stop offset="60%" stop-color="transparent"/><stop offset="100%" stop-color="rgba(0,8,14,.7)"/></radialGradient>
+  <filter id="s9_blur"><feGaussianBlur stdDeviation="28"/></filter>
+  <pattern id="s9_grid" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="16" cy="16" r=".85" fill="#4A9B8E" opacity=".055"/></pattern>
+</defs>
+<rect width="1400" height="788" fill="url(#s9_bg)"/>
+<rect width="1400" height="788" fill="url(#s9_grid)"/>
+<rect width="1400" height="788" fill="url(#s9_vignette)"/>
+<ellipse cx="1000" cy="400" rx="450" ry="380" fill="#26C6A6" opacity=".02" filter="url(#s9_blur)"/>
+<text x="100" y="60" font-size="11" letter-spacing="3.5" font-weight="600" fill="#889397">SECTION 05</text>
+<text x="100" y="100" font-size="36" font-weight="700" fill="#E3FCF7">Flexible Rule Engine</text>
+<text x="100" y="132" font-size="14" fill="#889397">Rules are recursive boolean trees stored in MongoDB. Update without redeployment.</text>
+
+<!-- Rule tree visualization -->
+<g transform="translate(100, 170)">
+  <text x="0" y="18" font-size="14" font-weight="700" fill="#26C6A6">Example: "High Intent Returner"</text>
+  <!-- AND root -->
+  <rect x="280" y="40" width="70" height="28" rx="14" fill="#26C6A6" fill-opacity=".15" stroke="#26C6A6" stroke-opacity=".5"/>
+  <text x="315" y="59" text-anchor="middle" font-size="12" font-weight="700" fill="#26C6A6">AND</text>
+  <!-- Lines -->
+  <line x1="240" y1="68" x2="100" y2="100" stroke="#E3FCF7" stroke-opacity=".15" stroke-width="1.5"/>
+  <line x1="280" y1="68" x2="230" y2="100" stroke="#E3FCF7" stroke-opacity=".15" stroke-width="1.5"/>
+  <line x1="315" y1="68" x2="370" y2="100" stroke="#E3FCF7" stroke-opacity=".15" stroke-width="1.5"/>
+  <line x1="350" y1="68" x2="520" y2="100" stroke="#E3FCF7" stroke-opacity=".15" stroke-width="1.5"/>
+  <line x1="380" y1="68" x2="670" y2="100" stroke="#E3FCF7" stroke-opacity=".15" stroke-width="1.5"/>
+  <!-- Leaves -->
+  <rect x="30" y="100" width="150" height="40" rx="6" fill="#E3FCF7" fill-opacity=".04" stroke="#E3FCF7" stroke-opacity=".12"/>
+  <text x="42" y="118" font-size="9" fill="#4FC3F7" font-weight="600">HISTORICAL</text>
+  <text x="42" y="132" font-size="11" fill="#E3FCF7">sessions >= 2</text>
+  <rect x="195" y="100" width="150" height="40" rx="6" fill="#E3FCF7" fill-opacity=".04" stroke="#E3FCF7" stroke-opacity=".12"/>
+  <text x="207" y="118" font-size="9" fill="#FFB300" font-weight="600">AGGREGATION</text>
+  <text x="207" y="132" font-size="11" fill="#E3FCF7">views >= 5</text>
+  <rect x="360" y="100" width="150" height="40" rx="6" fill="#E3FCF7" fill-opacity=".04" stroke="#E3FCF7" stroke-opacity=".12"/>
+  <text x="372" y="118" font-size="9" fill="#26C6A6" font-weight="600">TIMING</text>
+  <text x="372" y="132" font-size="11" fill="#E3FCF7">duration &lt;= 180s</text>
+  <rect x="525" y="100" width="150" height="40" rx="6" fill="#E3FCF7" fill-opacity=".04" stroke="#E3FCF7" stroke-opacity=".12"/>
+  <text x="537" y="118" font-size="9" fill="#00ED64" font-weight="600">SEQUENCE</text>
+  <text x="537" y="132" font-size="11" fill="#E3FCF7">cart &lt; 120s</text>
+  <rect x="690" y="100" width="150" height="40" rx="6" fill="#E3FCF7" fill-opacity=".04" stroke="#E3FCF7" stroke-opacity=".12"/>
+  <text x="702" y="118" font-size="9" fill="#E3FCF7" font-weight="600">FLAG</text>
+  <text x="702" y="132" font-size="11" fill="#E3FCF7">!purchased</text>
+</g>
+
+<!-- Condition types -->
+<g transform="translate(100, 365)">
+  <text x="0" y="18" font-size="16" font-weight="700" fill="#E3FCF7">Condition Types</text>
+  <g transform="translate(0, 35)">
+    <rect x="0" y="0" width="195" height="50" rx="6" fill="#FFB300" fill-opacity=".06" stroke="#FFB300" stroke-opacity=".2"/>
+    <text x="14" y="20" font-size="11" font-weight="700" fill="#FFB300">AGGREGATION</text>
+    <text x="14" y="38" font-size="11" fill="#889397">Counter thresholds</text>
+  </g>
+  <g transform="translate(210, 35)">
+    <rect x="0" y="0" width="195" height="50" rx="6" fill="#26C6A6" fill-opacity=".06" stroke="#26C6A6" stroke-opacity=".2"/>
+    <text x="14" y="20" font-size="11" font-weight="700" fill="#26C6A6">TIMING</text>
+    <text x="14" y="38" font-size="11" fill="#889397">Duration comparisons</text>
+  </g>
+  <g transform="translate(420, 35)">
+    <rect x="0" y="0" width="195" height="50" rx="6" fill="#00ED64" fill-opacity=".06" stroke="#00ED64" stroke-opacity=".2"/>
+    <text x="14" y="20" font-size="11" font-weight="700" fill="#00ED64">SEQUENCE</text>
+    <text x="14" y="38" font-size="11" fill="#889397">Ordered event patterns</text>
+  </g>
+  <g transform="translate(630, 35)">
+    <rect x="0" y="0" width="195" height="50" rx="6" fill="#4FC3F7" fill-opacity=".06" stroke="#4FC3F7" stroke-opacity=".2"/>
+    <text x="14" y="20" font-size="11" font-weight="700" fill="#4FC3F7">FLAG</text>
+    <text x="14" y="38" font-size="11" fill="#889397">Boolean markers</text>
+  </g>
+  <g transform="translate(840, 35)">
+    <rect x="0" y="0" width="195" height="50" rx="6" fill="#E3FCF7" fill-opacity=".04" stroke="#E3FCF7" stroke-opacity=".12"/>
+    <text x="14" y="20" font-size="11" font-weight="700" fill="#E3FCF7">NEGATION</text>
+    <text x="14" y="38" font-size="11" fill="#889397">Something didn't happen</text>
+  </g>
+  <g transform="translate(1050, 35)">
+    <rect x="0" y="0" width="195" height="50" rx="6" fill="#E3FCF7" fill-opacity=".04" stroke="#E3FCF7" stroke-opacity=".12"/>
+    <text x="14" y="20" font-size="11" font-weight="700" fill="#E3FCF7">HISTORICAL</text>
+    <text x="14" y="38" font-size="11" fill="#889397">Cross-session context</text>
+  </g>
+</g>
+
+<!-- How rules work -->
+<g transform="translate(100, 490)">
+  <text x="0" y="18" font-size="16" font-weight="700" fill="#E3FCF7">How It Works</text>
+  <g transform="translate(0, 35)">
+    <circle cx="10" cy="10" r="4" fill="#00ED64" opacity=".7"/>
+    <text x="26" y="14" font-size="13" fill="#E3FCF7">Rules evaluated on every event. Segments can be assigned AND revoked mid-session.</text>
+  </g>
+  <g transform="translate(0, 62)">
+    <circle cx="10" cy="10" r="4" fill="#00ED64" opacity=".7"/>
+    <text x="26" y="14" font-size="13" fill="#E3FCF7">Non-exclusive: a session can match multiple segments simultaneously.</text>
+  </g>
+  <g transform="translate(0, 89)">
+    <circle cx="10" cy="10" r="4" fill="#00ED64" opacity=".7"/>
+    <text x="26" y="14" font-size="13" fill="#E3FCF7">Rules pinned per session — consistent evaluation, no mid-session surprises.</text>
+  </g>
+  <g transform="translate(0, 116)">
+    <circle cx="10" cy="10" r="4" fill="#00ED64" opacity=".7"/>
+    <text x="26" y="14" font-size="13" fill="#E3FCF7">~120 dictionary lookups per event. Microseconds of compute. Short-circuit AND/OR.</text>
+  </g>
+</g>
+
+<!-- Update flow -->
+<g transform="translate(100, 660)">
+  <rect x="0" y="0" width="1200" height="50" rx="8" fill="#00ED64" fill-opacity=".04" stroke="#00ED64" stroke-opacity=".12"/>
+  <text x="30" y="20" font-size="12" font-weight="700" fill="#00ED64">Updating rules:</text>
+  <text x="160" y="20" font-size="12" fill="#E3FCF7">Edit rule document in MongoDB -> Side Input refreshes (5 min) -> New sessions use updated rules</text>
+  <text x="30" y="40" font-size="12" fill="#889397">No pipeline redeployment. No downtime. Existing sessions continue with their pinned version.</text>
+</g>
+</svg>
+</div>
+
+<!-- ===================== SLIDE 10: ML PATH ===================== -->
+<div class="slide" id="s10">
+<svg viewBox="0 0 1400 788" xmlns="http://www.w3.org/2000/svg" font-family="'Inter','SF Pro Display',system-ui,sans-serif">
+<defs>
+  <linearGradient id="s10_bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#001E2B"/><stop offset="100%" stop-color="#00111A"/></linearGradient>
+  <radialGradient id="s10_vignette" cx="50%" cy="50%" r="72%"><stop offset="60%" stop-color="transparent"/><stop offset="100%" stop-color="rgba(0,8,14,.7)"/></radialGradient>
+  <filter id="s10_blur"><feGaussianBlur stdDeviation="28"/></filter>
+  <pattern id="s10_grid" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="16" cy="16" r=".85" fill="#4A9B8E" opacity=".055"/></pattern>
+</defs>
+<rect width="1400" height="788" fill="url(#s10_bg)"/>
+<rect width="1400" height="788" fill="url(#s10_grid)"/>
+<rect width="1400" height="788" fill="url(#s10_vignette)"/>
+<ellipse cx="700" cy="400" rx="500" ry="400" fill="#4FC3F7" opacity=".02" filter="url(#s10_blur)"/>
+<text x="100" y="60" font-size="11" letter-spacing="3.5" font-weight="600" fill="#889397">SECTION 06</text>
+<text x="100" y="100" font-size="36" font-weight="700" fill="#E3FCF7">ML-Ready Architecture</text>
+<text x="100" y="132" font-size="15" fill="#4FC3F7">The session summary IS the feature vector — no transformation needed</text>
+
+<!-- Pipeline diagram with ML branch -->
+<g transform="translate(100, 180)">
+  <rect x="0" y="30" width="140" height="45" rx="6" fill="#4FC3F7" fill-opacity=".08" stroke="#4FC3F7" stroke-opacity=".2"/>
+  <text x="70" y="57" text-anchor="middle" font-size="11" font-weight="600" fill="#4FC3F7">Pub/Sub In</text>
+  <line x1="140" y1="52" x2="175" y2="52" stroke="#E3FCF7" stroke-width="1.5" stroke-opacity=".3"/>
+  <polygon points="175,49 182,52 175,55" fill="#E3FCF7" opacity=".5"/>
+  <rect x="182" y="30" width="160" height="45" rx="6" fill="#00ED64" fill-opacity=".08" stroke="#00ED64" stroke-opacity=".2"/>
+  <text x="262" y="50" text-anchor="middle" font-size="11" font-weight="600" fill="#00ED64">Stateful DoFn</text>
+  <text x="262" y="65" text-anchor="middle" font-size="10" fill="#889397">Update Summary</text>
+  <!-- Branch point -->
+  <circle cx="385" cy="52" r="5" fill="#E3FCF7" fill-opacity=".4"/>
+  <line x1="342" y1="52" x2="380" y2="52" stroke="#E3FCF7" stroke-width="1.5" stroke-opacity=".3"/>
+  <!-- Rules branch (top) -->
+  <line x1="390" y1="48" x2="440" y2="25" stroke="#00ED64" stroke-width="1.5" stroke-opacity=".5"/>
+  <rect x="440" y="5" width="155" height="45" rx="6" fill="#00ED64" fill-opacity=".08" stroke="#00ED64" stroke-opacity=".3"/>
+  <text x="517" y="25" text-anchor="middle" font-size="11" font-weight="600" fill="#00ED64">Rule Engine</text>
+  <text x="517" y="40" text-anchor="middle" font-size="10" fill="#889397">(current)</text>
+  <line x1="595" y1="27" x2="630" y2="27" stroke="#00ED64" stroke-width="1.5" stroke-opacity=".3"/>
+  <polygon points="630,24 637,27 630,30" fill="#00ED64" opacity=".5"/>
+  <rect x="637" y="5" width="120" height="45" rx="6" fill="#4FC3F7" fill-opacity=".08" stroke="#4FC3F7" stroke-opacity=".2"/>
+  <text x="697" y="32" text-anchor="middle" font-size="11" font-weight="600" fill="#4FC3F7">Pub/Sub Out</text>
+  <!-- ML branch (bottom) -->
+  <line x1="390" y1="56" x2="440" y2="82" stroke="#4FC3F7" stroke-width="1.5" stroke-opacity=".4" stroke-dasharray="4,3"/>
+  <rect x="440" y="60" width="155" height="45" rx="6" fill="#4FC3F7" fill-opacity=".06" stroke="#4FC3F7" stroke-opacity=".2" stroke-dasharray="3,3"/>
+  <text x="517" y="80" text-anchor="middle" font-size="11" font-weight="600" fill="#4FC3F7">RunInference</text>
+  <text x="517" y="95" text-anchor="middle" font-size="10" fill="#889397">(future ML)</text>
+  <line x1="595" y1="82" x2="630" y2="82" stroke="#4FC3F7" stroke-width="1.5" stroke-opacity=".3" stroke-dasharray="4,3"/>
+  <polygon points="630,79 637,82 630,85" fill="#4FC3F7" opacity=".4"/>
+  <rect x="637" y="60" width="120" height="45" rx="6" fill="#4FC3F7" fill-opacity=".06" stroke="#4FC3F7" stroke-opacity=".15" stroke-dasharray="3,3"/>
+  <text x="697" y="87" text-anchor="middle" font-size="11" font-weight="600" fill="#4FC3F7">Pub/Sub Out</text>
+</g>
+
+<!-- Separation of concerns -->
+<g transform="translate(100, 330)">
+  <text x="0" y="20" font-size="18" font-weight="700" fill="#E3FCF7">Feature Schema Decoupled from Rules</text>
+  <g transform="translate(0, 45)">
+    <rect x="0" y="0" width="1200" height="80" rx="8" fill="#E3FCF7" fill-opacity=".03" stroke="#E3FCF7" stroke-opacity=".08"/>
+    <text x="350" y="18" font-size="10" letter-spacing="2" font-weight="600" fill="#889397">FEATURE SCHEMA (WHAT TO TRACK)</text>
+    <rect x="30" y="30" width="340" height="35" rx="4" fill="#00ED64" fill-opacity=".06" stroke="#00ED64" stroke-opacity=".15"/>
+    <text x="200" y="52" text-anchor="middle" font-size="12" fill="#E3FCF7">Counters, sequences, flags, timing</text>
+    <text x="600" y="52" text-anchor="middle" font-size="20" fill="#889397">-></text>
+    <rect x="650" y="30" width="230" height="35" rx="4" fill="#00ED64" fill-opacity=".06" stroke="#00ED64" stroke-opacity=".15"/>
+    <text x="765" y="52" text-anchor="middle" font-size="12" fill="#00ED64">Rules consume it</text>
+    <rect x="910" y="30" width="230" height="35" rx="4" fill="#4FC3F7" fill-opacity=".06" stroke="#4FC3F7" stroke-opacity=".15"/>
+    <text x="1025" y="52" text-anchor="middle" font-size="12" fill="#4FC3F7">ML model consumes it</text>
+  </g>
+</g>
+
+<!-- Transition phases -->
+<g transform="translate(100, 480)">
+  <text x="0" y="20" font-size="18" font-weight="700" fill="#E3FCF7">Transition Path</text>
+  <g transform="translate(0, 45)">
+    <rect x="0" y="0" width="270" height="65" rx="8" fill="#00ED64" fill-opacity=".08" stroke="#00ED64" stroke-opacity=".3"/>
+    <text x="16" y="20" font-size="10" letter-spacing="2" font-weight="700" fill="#00ED64">NOW</text>
+    <text x="16" y="38" font-size="13" font-weight="600" fill="#E3FCF7">Rules Only</text>
+    <text x="16" y="55" font-size="11" fill="#889397">Business rules decide segments</text>
+  </g>
+  <line x1="270" y1="27" x2="300" y2="27" stroke="#E3FCF7" stroke-width="1.5" stroke-opacity=".2"/>
+  <polygon points="300,24 307,27 300,30" fill="#E3FCF7" opacity=".3"/>
+  <g transform="translate(307, 45)">
+    <rect x="0" y="0" width="270" height="65" rx="8" fill="#4FC3F7" fill-opacity=".06" stroke="#4FC3F7" stroke-opacity=".2"/>
+    <text x="16" y="20" font-size="10" letter-spacing="2" font-weight="700" fill="#4FC3F7">SHADOW MODE</text>
+    <text x="16" y="38" font-size="13" font-weight="600" fill="#E3FCF7">Rules + ML (compare offline)</text>
+    <text x="16" y="55" font-size="11" fill="#889397">ML output logged to BigQuery</text>
+  </g>
+  <line x1="577" y1="27" x2="607" y2="27" stroke="#E3FCF7" stroke-width="1.5" stroke-opacity=".2"/>
+  <polygon points="607,24 614,27 607,30" fill="#E3FCF7" opacity=".3"/>
+  <g transform="translate(614, 45)">
+    <rect x="0" y="0" width="270" height="65" rx="8" fill="#4FC3F7" fill-opacity=".06" stroke="#4FC3F7" stroke-opacity=".2"/>
+    <text x="16" y="20" font-size="10" letter-spacing="2" font-weight="700" fill="#4FC3F7">A/B TEST</text>
+    <text x="16" y="38" font-size="13" font-weight="600" fill="#E3FCF7">Split by session hash</text>
+    <text x="16" y="55" font-size="11" fill="#889397">Gradual ML rollout</text>
+  </g>
+  <line x1="884" y1="27" x2="914" y2="27" stroke="#E3FCF7" stroke-width="1.5" stroke-opacity=".2"/>
+  <polygon points="914,24 921,27 914,30" fill="#E3FCF7" opacity=".3"/>
+  <g transform="translate(921, 45)">
+    <rect x="0" y="0" width="270" height="65" rx="8" fill="#00ED64" fill-opacity=".06" stroke="#00ED64" stroke-opacity=".2"/>
+    <text x="16" y="20" font-size="10" letter-spacing="2" font-weight="700" fill="#00ED64">FULL ML</text>
+    <text x="16" y="38" font-size="13" font-weight="600" fill="#E3FCF7">Model decides segments</text>
+    <text x="16" y="55" font-size="11" fill="#889397">No architecture changes</text>
+  </g>
+</g>
+
+<!-- Bottom -->
+<g transform="translate(100, 630)">
+  <rect x="0" y="0" width="1200" height="55" rx="8" fill="#00ED64" fill-opacity=".04" stroke="#00ED64" stroke-opacity=".12"/>
+  <text x="30" y="22" font-size="13" font-weight="600" fill="#00ED64">ML team adds features to the schema without touching rules.</text>
+  <text x="30" y="42" font-size="12" fill="#889397">Transition counts, event buffers, new sequences — all bounded, all tracked in the same summary. No new infrastructure.</text>
+</g>
+</svg>
+</div>
+
+<!-- ===================== SLIDE 11: CLOSING ===================== -->
+<div class="slide" id="s11">
+<svg viewBox="0 0 1400 788" xmlns="http://www.w3.org/2000/svg" font-family="'Inter','SF Pro Display',system-ui,sans-serif">
+<defs>
+  <linearGradient id="s11_bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#001E2B"/><stop offset="100%" stop-color="#00111A"/></linearGradient>
+  <radialGradient id="s11_vignette" cx="50%" cy="50%" r="72%"><stop offset="60%" stop-color="transparent"/><stop offset="100%" stop-color="rgba(0,8,14,.7)"/></radialGradient>
+  <filter id="s11_glow"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="s11_blur"><feGaussianBlur stdDeviation="28"/></filter>
+  <pattern id="s11_grid" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="16" cy="16" r=".85" fill="#4A9B8E" opacity=".055"/></pattern>
+</defs>
+<rect width="1400" height="788" fill="url(#s11_bg)"/>
+<rect width="1400" height="788" fill="url(#s11_grid)"/>
+<rect width="1400" height="788" fill="url(#s11_vignette)"/>
+<ellipse cx="700" cy="394" rx="400" ry="380" fill="#00ED64" opacity=".03" filter="url(#s11_blur)"/>
+<!-- Pulsing rings -->
+<circle cx="700" cy="320" r="80" fill="none" stroke="#00ED64" stroke-opacity=".1" stroke-width="1"><animate attributeName="r" values="80;120;80" dur="4s" repeatCount="indefinite"/><animate attributeName="stroke-opacity" values=".1;.05;.1" dur="4s" repeatCount="indefinite"/></circle>
+<circle cx="700" cy="320" r="150" fill="none" stroke="#00ED64" stroke-opacity=".06" stroke-width="1"><animate attributeName="r" values="150;190;150" dur="5s" repeatCount="indefinite"/><animate attributeName="stroke-opacity" values=".06;.03;.06" dur="5s" repeatCount="indefinite"/></circle>
+<circle cx="700" cy="320" r="230" fill="none" stroke="#00ED64" stroke-opacity=".03" stroke-width="1"><animate attributeName="r" values="230;270;230" dur="6s" repeatCount="indefinite"/><animate attributeName="stroke-opacity" values=".03;.015;.03" dur="6s" repeatCount="indefinite"/></circle>
+
+<text x="700" y="330" text-anchor="middle" font-size="68" font-weight="800" fill="#E3FCF7" filter="url(#s11_glow)">Questions?</text>
+<text x="700" y="380" text-anchor="middle" font-size="20" fill="#00ED64">Let's dive deeper into any area</text>
+
+<!-- Summary cards -->
+<g transform="translate(200, 440)">
+  <rect x="0" y="0" width="1000" height="180" rx="12" fill="#E3FCF7" fill-opacity=".03" stroke="#E3FCF7" stroke-opacity=".08"/>
+  <text x="500" y="30" text-anchor="middle" font-size="14" font-weight="700" fill="#889397">ARCHITECTURE HIGHLIGHTS</text>
+  <g transform="translate(30, 50)">
+    <circle cx="8" cy="8" r="4" fill="#00ED64" opacity=".7"/><text x="22" y="12" font-size="13" fill="#E3FCF7">~1 KB per session — bounded by rules, not events (200K sessions = 200 MB)</text>
+  </g>
+  <g transform="translate(30, 78)">
+    <circle cx="8" cy="8" r="4" fill="#00ED64" opacity=".7"/><text x="22" y="12" font-size="13" fill="#E3FCF7">~170-360ms end-to-end latency — 5x headroom below the 2s SLA</text>
+  </g>
+  <g transform="translate(30, 106)">
+    <circle cx="8" cy="8" r="4" fill="#00ED64" opacity=".7"/><text x="22" y="12" font-size="13" fill="#E3FCF7">Out-of-order sequence matching via timestamps — zero buffering latency</text>
+  </g>
+  <g transform="translate(30, 134)">
+    <circle cx="8" cy="8" r="4" fill="#00ED64" opacity=".7"/><text x="22" y="12" font-size="13" fill="#E3FCF7">MongoDB: document model fits session state, flexible rules, low-latency revival, horizontal scale</text>
+  </g>
+  <g transform="translate(30, 162)">
+    <circle cx="8" cy="8" r="4" fill="#00ED64" opacity=".7"/><text x="22" y="12" font-size="13" fill="#E3FCF7">ML-ready from day one — same summary feeds rules today and RunInference tomorrow</text>
+  </g>
+</g>
+</svg>
+</div>
+
+</div>
+<div id="ctrl">
+  <div class="cb" id="prev">&#8592;</div>
+  <span id="ctr">1 / 11</span>
+
+  <div class="cb" id="next">&#8594;</div>
+</div>
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let cur = 0;
+  function go(n) {
+    slides[cur].classList.remove('active');
+    slides[cur].classList.add('prev');
+    setTimeout(() => slides[cur].classList.remove('prev'), 400);
+    cur = (n + slides.length) % slides.length;
+    slides[cur].classList.add('active');
+    document.getElementById('ctr').textContent = (cur + 1) + ' / ' + slides.length;
+  }
+  document.getElementById('next').addEventListener('click', () => go(cur + 1));
+  document.getElementById('prev').addEventListener('click', () => go(cur - 1));
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') go(cur + 1);
+    if (e.key === 'ArrowLeft')                   go(cur - 1);
+  });
+</script>
+</body>
+</html>
