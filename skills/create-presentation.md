@@ -275,6 +275,64 @@ Update `folder-count` on the presentations section.
 
 ---
 
+## PDF Export (Print Support)
+
+Every presentation must include `@media print` styles so the user can export to PDF via the browser's print dialog (Ctrl+P / Cmd+P). Add this block at the end of the `<style>` section, after the `#ctr` rule:
+
+```css
+@media print {
+  @page {
+    size: landscape;
+    margin: 0;
+  }
+  html, body {
+    width: 100%; height: auto;
+    overflow: visible;
+    background: #00111A;
+    display: block;
+  }
+  #deck {
+    width: 100%; height: auto;
+    overflow: visible;
+    display: block;
+  }
+  #ctrl { display: none !important; }
+  .slide {
+    position: relative;
+    opacity: 1 !important;
+    pointer-events: all;
+    transform: none !important;
+    transition: none;
+    display: block;
+    width: 100%;
+    height: 100vh;
+    page-break-after: always;
+    break-after: page;
+  }
+  .slide:last-child {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  .slide svg {
+    width: 100%;
+    height: 100%;
+  }
+  .slide svg * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+```
+
+**What this does:**
+- Sets landscape orientation with no margins (full-bleed slides)
+- Shows all slides stacked instead of only the active one
+- Inserts a page break after each slide so each becomes its own PDF page
+- Hides the navigation controls
+- Disables all SVG animations for clean static output
+
+---
+
 ## Common Pitfalls
 
 Real issues encountered and fixed — generalised as rules.
